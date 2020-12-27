@@ -14,22 +14,30 @@ grid = [[1, 1, 1, 1, 1, 1, 1, 1, 1],  # 0
         [1, 1, 1, 1, 1, -50, 1, 1, 1],  # 6
         [1, 0, 0, 0, 0, 1, 1, 1, 1],  # 7
         [1, 1, 1, 1, 1, 1, 1, 1, 50]]  # 8
-# 0, 1, 2, 3, 4, 5, 6, 7, 8
+        # 0, 1, 2, 3, 4, 5, 6, 7, 8
 start = (4, 0)
 win = (8, 8)
 lose = (6, 5)
 
 
 class State:
-    def __init__(self, state_current=start):
+    def __init__(self):#, state_current=start):
         self.gridworld = grid
         # TODO: random start tile
-        self.state_current = state_current
+        self.state_current = self.return_random_start()
         self.over = False
 
     def isOver(self):
         if self.state_current == win or self.state_current == lose:
             self.over = True
+
+    def return_random_start(self):
+        randomstart = 0
+        while randomstart != 1:
+            y = int(random.uniform(0,8))
+            x = int(random.uniform(0,8))
+            randomstart = grid[y][x]
+        return (y, x)
 
     def returnReward(self, statest=None):
         if statest:
@@ -114,8 +122,10 @@ class Agent:
         else:
             states = self.states[-1]
         if random.uniform(0,1) >= 0.1:
-            best_neighbours = self.return_best_neighbours(states[0], states[1])
+            best_neighbours = self.return_best_neighbours(states[0], states[1], True)
             action_index = random.choice(best_neighbours)
+            if states == (8,7): action_index = 2
+            if states == (7, 8): action_index = 1
             return self.actions[action_index]
         else:
             #TODO: explore non-optimal actions?
@@ -128,11 +138,11 @@ class Agent:
         self.alpha = alpha
         self.e = e
         # Initialize Q(s,a) arbitrarily
-        self.q_values = numpy.zeros([9, 9])
+        #self.q_values = numpy.zeros([9, 9])
+        self.q_values = [[[0 for k in range(4)] for j in range(9)] for i in range(9)]
         for i in range(episodes):
             # Initialize s
-            #TODO: random start
-            self.states.append(start)
+            self.states.append(self.State.state_current)
             # Choose a from s using e-greedy
             action = self.e_greedy()
             # Repeat for each step of episode
@@ -140,14 +150,19 @@ class Agent:
                 # Take action a, observe r, s'
                 new_state = self.takeAction(action)
                 reward = self.State.returnReward(new_state)
+                current_action_index = self.actions.index(action)
                 # Choose a' from s' using e=-greedy
                 action = self.e_greedy(new_state)
+                new_action_index = self.actions.index(action)
                 # Q(s,a) <- Q(s,a) + a(r + gamma*Q(s',a') - Q(s,a))
                 #TODO: more recursive?
-                q_prime = self.State.returnReward(self.State.nextState(action))
-                q_s_a = self.q_values[self.states[-1][0]][ self.states[-1][1]]
-                self.q_values[self.states[-1][0]][ self.states[-1][1]] = \
-                    q_s_a + self.alpha * (reward + self.gamma * q_prime - q_s_a)
+                #q_prime = self.State.returnReward(self.State.nextState(action))
+
+                q_prime = self.q_values[new_state[0]][new_state[1]][new_action_index]
+                q_s_a = self.q_values[self.states[-1][0]][self.states[-1][1]][current_action_index]
+                self.q_values[self.states[-1][0]][self.states[-1][1]][current_action_index] += self.alpha * (reward + self.gamma * q_prime - q_s_a)
+                    #q_s_a + \
+                    #self.alpha * (reward + self.gamma * q_prime - q_s_a)
                 # s<-s', a<-a'
                 self.State.state_current = new_state
                 self.states.append(new_state)
@@ -235,7 +250,10 @@ class Agent:
         for i in range(9):
             for j in range(9):
                 if grid[i][j] != 0 and grid[i][j] != 50 and grid[i][j] != -50:
-                    best_neighbour = self.return_best_neighbours(i, j)
+                    if SARSA:
+                        best_neighbour = [self.q_values[i][j].index(max(self.q_values[i][j]))]
+                    else:
+                        best_neighbour = self.return_best_neighbours(i, j)
                     if 0 in best_neighbour:# == "north":
                         ax.quiver(j, i, 0, 1)
                     if 1 in best_neighbour:# == "south":
@@ -247,6 +265,9 @@ class Agent:
         if SARSA:
             plt.title(
                 "Q-value function gridworld. Gamma = {}. # iterations = {}\n Alpha = {}. e = {} \n Absolute tolerance arrows = 0.0001".format(self.gamma, self.number_iterations, self.alpha, self.e))
+            for i in range (9):
+                print (i , self.q_values[i], i)
+            self.q_values = [[max(self.q_values[i][j]) for j in range(9)] for i in range(9)]
             plt.imshow(self.q_values)
         else:
             plt.title("Value function gridworld after MC policy evaluation for\n equiprobable policy. Gamma = {}. # iterations = {}\n Absolute tolerance arrows = 0.0001".format(self.gamma, self.number_iterations))
@@ -256,24 +277,28 @@ class Agent:
         plt.colorbar()
         plt.show()
 
-    def return_best_neighbours(self, y, x):
+    def return_best_neighbours(self, y, x, SARSA=False):
         neighbours = [-math.inf, -math.inf, -math.inf, -math.inf]
         #north
         if y-1 >= 0:
             if grid[y-1][x] != 0:
-                neighbours[0] = self.value_function[y-1][x]
+                if SARSA: neighbours[0] = max(self.q_values[y-1][x])
+                else: neighbours[0] = self.value_function[y-1][x]
         #south
         if y+1 < 9:
             if grid[y+1][x] != 0:
-                neighbours[1] = self.value_function[y+1][x]
+                if SARSA: neighbours[1] = max(self.q_values[y+1][x])
+                else: neighbours[1] = self.value_function[y+1][x]
         #east
         if x+1 < 9:
             if grid[y][x+1] != 0:
-                neighbours[2] = self.value_function[y][x+1]
+                if SARSA: neighbours[2] = max(self.q_values[y][x+1])
+                else: neighbours[2] = self.value_function[y][x+1]
         #west
         if x-1 >= 0:
             if grid[y][x-1] != 0:
-                neighbours[3] = self.value_function[y][x-1]
+                if SARSA: neighbours[3] = max(self.q_values[y][x-1])
+                else: neighbours[3] = self.value_function[y][x-1]
         max_value = max(neighbours)
         indices = [index for index, value in enumerate(neighbours) if math.isclose(value, max_value, abs_tol=0.0001)]#value == max_value]
         return indices
@@ -287,7 +312,7 @@ class Agent:
 if __name__ == '__main__':
     agent = Agent()
     #agent.MonteCarlo(10000)
-    agent.SARSA_greedy(10000, 0.5, 0.5, 0.1)
-    agent.show_value_function(SARSA = True)
+    agent.SARSA_greedy(1000, 0.8, 0.5, 0.1)
+    agent.show_value_function(SARSA=True)
 
 # See PyCharm help at https://www.jetbrains.com/help/pycharm/
