@@ -264,7 +264,7 @@ class Agent:
                         ax.quiver(j, i, -1, 0)
         if SARSA:
             plt.title(
-                "Q-value function gridworld. Gamma = {}. # iterations = {}\n Alpha = {}. e = {} \n Absolute tolerance arrows = 0.0001".format(self.gamma, self.number_iterations, self.alpha, self.e))
+                "Q-value function gridworld. Gamma = {}. # iterations = {}\n Alpha = {}. e = {}".format(self.gamma, self.number_iterations, self.alpha, self.e))
             for i in range (9):
                 print (i , self.q_values[i], i)
             self.q_values = [[max(self.q_values[i][j]) for j in range(9)] for i in range(9)]
