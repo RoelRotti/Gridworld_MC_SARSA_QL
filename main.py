@@ -388,7 +388,7 @@ if __name__ == '__main__':
     v_valueMC = 0
     q_valueSARSA = 0
     q_valueQL = 0
-    reward = 0
+    reward_over_episodes = 0
     # Plot v-values MC
     if v_valueMC:
         agent = Agent()
@@ -407,7 +407,7 @@ if __name__ == '__main__':
         agent.show_value_function(SARSA=True)
 
     # Plot reward Equiprobable Policy & SARSA & QL:
-    if reward:
+    if reward_over_episodes:
         agent1 = Agent()
         agent2 = Agent()
         agent3 = Agent()
