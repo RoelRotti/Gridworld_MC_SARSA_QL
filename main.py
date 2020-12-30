@@ -27,6 +27,7 @@ class State:
         self.gridworld = grid
         self.state_current = self.return_random_start()
         self.over = False
+        self.statesState = []
 
     def isOver(self):
         if self.state_current == win or self.state_current == lose:
@@ -56,20 +57,27 @@ class State:
             else:
                 return -1
 
-    def printBoard(self, doPrint=True):
+    def printBoard(self, doPrint=True, path=True):
         world = self.gridworld
         if doPrint:
-            world[self.state_current[0]][self.state_current[1]] = 'A'
+            if path:
+                for s in range(len(self.statesState)):
+                    world[self.statesState[s][0]][self.statesState[s][1]] = 'A'
+            else:
+                world[self.state_current[0]][self.state_current[1]] = 'A'
             print(np.matrix(world))
         else:
             # Reduce variance for imshow to show difference in colour
             world[win[0]][win[1]] = 2
             world[lose[0]][lose[1]] = -2
             # Set current state
-            world[self.state_current[0]][self.state_current[1]] = 3
+            if path:
+                for s in range(len(self.statesState)):
+                    world[self.statesState[s][0]][self.statesState[s][1]] = 3
+            else:
+                world[self.state_current[0]][self.state_current[1]] = 3
             plt.title("Gridworld")
             plt.imshow(world)
-            plt.legend()
             plt.show()
 
     def nextState(self, action):
@@ -86,6 +94,7 @@ class State:
         if (nextStates[0] >= 0) and (nextStates[0] < 9) and (nextStates[1] >= 0) and (nextStates[1] < 9):
             # check for walls
             if self.gridworld[nextStates[0]][nextStates[1]] != 0:
+                self.statesState.append(nextStates)
                 return nextStates
         return self.state_current
 
@@ -165,6 +174,7 @@ class Agent:
                 self.State.state_current = new_state
                 self.states.append(new_state)
                 self.State.isOver()
+            #self.State.printBoard(doPrint=False)
             self.reset()
             # Until s is terminal
 
@@ -281,8 +291,8 @@ class Agent:
                 "SARSA: Optimal policy in gridworld. Gamma = {} \n # iterations = {} Alpha = {}. e = {}".format(self.gamma,
                                                                                                                self.number_iterations,
                                                                                                                self.alpha, self.e))
-            for i in range (9):
-                print (i , self.q_values[i], i)
+            # for i in range (9):
+            #     print (i , self.q_values[i], i)
             self.q_values = [[max(self.q_values[i][j]) for j in range(9)] for i in range(9)]
             plt.imshow(self.q_values)
         elif QL:
@@ -291,8 +301,8 @@ class Agent:
                                                                                                         self.number_iterations,
                                                                                                         self.alpha,
                                                                                                         self.e))
-            for i in range(9):
-                print(i, self.q_values[i], i)
+            # for i in range(9):
+            #     print(i, self.q_values[i], i)
             self.q_values = [[max(self.q_values[i][j]) for j in range(9)] for i in range(9)]
             plt.imshow(self.q_values)
         else:
@@ -363,12 +373,9 @@ def plot_total_reward(reward1, reward2, reward3):
 # Press the green button in the gutter to run the script.
 if __name__ == '__main__':
     v_valueMC = 0
-    q_valueSARSA = 0
+    q_valueSARSA = 1
     q_valueQL = 0
     reward = 0
-
-    agent = Agent()
-    agent.State.printBoard()
 
     ## Plot v-values MC
     if v_valueMC:
@@ -378,7 +385,7 @@ if __name__ == '__main__':
     ## Plot q values SARSA/QL:
     if q_valueSARSA:
         agent = Agent()
-        agent.SARSA_greedy(100000, 0.8, 0.5, 0.1)
+        agent.SARSA_greedy(10, 0.8, 0.5, 0.1)
         agent.show_value_function(SARSA=True)
 
     ## Plot q values SARSA/QL:
