@@ -99,6 +99,10 @@ class State:
         return self.state_current
 
 
+## Class that represents the agent traversing through the gridworld. The 3 main algorithms that are implemented:
+# -Monte Carlo Policy Evaluation
+# -SARSA
+# -Q-learning
 class Agent:
     def __init__(self):
         self.actions = ["north", "south", "east", "west"]
@@ -118,13 +122,15 @@ class Agent:
         self.q_values = [[[0 for k in range(4)] for j in range(9)] for i in range(9)]
         self.episode = 0
 
-    def e_greedy(self, statest = None):
+    # e-greedy function that first checks for rewards and later for q-values. 'e' descends over time to 0 at the end of
+    # the total amounts of episodes. Can be used with a given state or if not defined just checks the last state
+    def e_greedy(self, statest=None):
         if statest:
             states = statest
         else:
             states = self.states[-1]
         # Decreasing epsilon to reduce exploration over time
-        if random.uniform(0,1) >= (0.1-0.1*(self.episode/self.number_iterations)):
+        if random.uniform(0, 1) >= (self.e-self.e*(self.episode/self.number_iterations)):
             # First check for the reward, since q value terminal state = 0
             terminal, best_neighbours = self.return_best_neighbours(states[0], states[1], reward=True)
             action_index = random.choice(best_neighbours)
@@ -135,18 +141,15 @@ class Agent:
                 action_index = random.choice(best_neighbours)
             return self.actions[action_index]
         else:
-            #TODO: explore non-optimal actions?
             action = random.choice(self.actions)
             return action
 
+    # SARSA-greedy based on pseudoalgorithm by Sutton & Barto
     def SARSA_greedy(self, episodes, gamma, alpha, e):
         self.number_iterations = episodes
         self.gamma = gamma
         self.alpha = alpha
         self.e = e
-        # Initialize Q(s,a) arbitrarily
-        #self.q_values = numpy.zeros([9, 9])
-
         for i in range(episodes):
             self.episode = i
             # Initialize s
@@ -178,6 +181,7 @@ class Agent:
             self.reset()
             # Until s is terminal
 
+    # Q-Learning based on pseudoalgorithm by Sutton & Barto
     def Q_learning(self, episodes, gamma, alpha, e):
         self.number_iterations = episodes
         self.gamma = gamma
@@ -208,16 +212,17 @@ class Agent:
             # Until s is terminal
             self.reset()
 
-
+    # Select a random policy out of the actions of the agent
     def equiprobableAction(self):
         action = random.choice(self.actions)
         return action
 
+    # Agents takes action. In State it is checked whether this is a valid action
     def takeAction(self, action):
         nextStates = self.State.nextState(action)
-        #return State(state_current=nextStates)
         return nextStates
 
+    # Monte Carlo Policy Evaluation based on pseudoalgorithm by Sutton & Barto
     def MonteCarlo(self, iterations, gamma):
         self.number_iterations = iterations
         self.gamma = gamma
@@ -227,6 +232,7 @@ class Agent:
             self.total_reward_episodes.append(reward)
             self.reset()
 
+    # Helper function MCPE. Completes one episode by taking a path to terminal state
     def MCpath(self):
         while self.State.over is False:
             # Pick action
@@ -238,6 +244,7 @@ class Agent:
             # Check if end tile has been reached
             self.State.isOver()
 
+    # Helper function MCPE. Backs up path after 'MCpath' and assigns correct v-values
     def backUpMC(self):
         first = True
         G = 0
@@ -269,6 +276,7 @@ class Agent:
         # For keeping track of reward over time:
         return reward_path
 
+    # Helper function to plot the heat map of the gridworld. Can be used for MC, SARSA, QL
     def show_value_function(self, SARSA=False, QL=False):
         ax = plt.subplot()
         for i in range(9):
@@ -313,6 +321,7 @@ class Agent:
         plt.colorbar()
         plt.show()
 
+    # Helper function. Is used in various ways throughout the code such as for printing, SARSA, checking reward etc.
     def return_best_neighbours(self, y, x, SARSA=False, reward=False):
         neighbours = [-math.inf, -math.inf, -math.inf, -math.inf]
         #north
@@ -346,10 +355,13 @@ class Agent:
             return "terminal", indices
         return None, indices
 
+    # Correct resets for after one episode
     def reset(self):
         self.states = []
         self.State = State()
 
+
+# Printer function to print return reward over episodes for the equiprobable policy, SARSA & QL
 def plot_total_reward(reward1, reward2, reward3):
     x = []
     for i in range(len(reward1)):
@@ -370,31 +382,31 @@ def plot_total_reward(reward1, reward2, reward3):
     plt.legend()
     plt.show()
 
-# Press the green button in the gutter to run the script.
+
+# Main: set parameters below to run different options
 if __name__ == '__main__':
     v_valueMC = 0
-    q_valueSARSA = 1
+    q_valueSARSA = 0
     q_valueQL = 0
     reward = 0
-
-    ## Plot v-values MC
+    # Plot v-values MC
     if v_valueMC:
         agent = Agent()
         agent.MonteCarlo(10000, 0.5)
 
-    ## Plot q values SARSA/QL:
+    # Plot q values SARSA/QL:
     if q_valueSARSA:
         agent = Agent()
         agent.SARSA_greedy(10, 0.8, 0.5, 0.1)
         agent.show_value_function(SARSA=True)
 
-    ## Plot q values SARSA/QL:
+    # Plot q values SARSA/QL:
     if q_valueQL:
         agent = Agent()
         agent.Q_learning(1000, 0.8, 0.5, 0.1)
         agent.show_value_function(SARSA=True)
 
-    ## Plot reward Equiprobable Policy & SARSA & QL:
+    # Plot reward Equiprobable Policy & SARSA & QL:
     if reward:
         agent1 = Agent()
         agent2 = Agent()
