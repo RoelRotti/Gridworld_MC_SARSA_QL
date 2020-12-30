@@ -4,7 +4,9 @@ import numpy as np, math, scipy.stats, norm
 import numpy as numpy
 import matplotlib.pyplot as plt
 import matplotlib.colors as colors
+from scipy.interpolate import make_interp_spline, BSpline
 
+# Define the gridworld: map + win/lose
 grid = [[1, 1, 1, 1, 1, 1, 1, 1, 1],  # 0
         [1, 1, 0, 0, 0, 0, 0, 1, 1],  # 1
         [1, 1, 1, 1, 1, 1, 0, 1, 1],  # 2
@@ -19,11 +21,10 @@ start = (4, 0)
 win = (8, 8)
 lose = (6, 5)
 
-
+# Class that represents the position within the gridworld. Mainly for checking valid moves
 class State:
     def __init__(self):#, state_current=start):
         self.gridworld = grid
-        # TODO: random start tile
         self.state_current = self.return_random_start()
         self.over = False
 
@@ -55,33 +56,23 @@ class State:
             else:
                 return -1
 
-    def printBoard(self):
-        ax = plt.subplot()
-        for i in range(9):
-            for j in range(9):
-                if grid[i][j] == 1:
-                    ax.quiver(j, i, 1, 1)
-                elif grid[i][j] == 0:
-                    ax.quiver(j, i, 1, 1)
-                elif grid[i][j] == 3:
-                    ax.quiver(j, i, 1, 1)
-                elif grid[i][j] == -3:
-                    ax.quiver(j, i, -1, 1)
-        # Reduce variance for imshow
-        self.gridworld[win[0]][win[1]] = 3
-        self.gridworld[lose[0]][lose[1]] = -3
-        plt.title("Gridworld")
-        plt.imshow(self.gridworld)
-        plt.legend()
-        plt.show()
+    def printBoard(self, doPrint=True):
+        world = self.gridworld
+        if doPrint:
+            world[self.state_current[0]][self.state_current[1]] = 'A'
+            print(np.matrix(world))
+        else:
+            # Reduce variance for imshow to show difference in colour
+            world[win[0]][win[1]] = 2
+            world[lose[0]][lose[1]] = -2
+            # Set current state
+            world[self.state_current[0]][self.state_current[1]] = 3
+            plt.title("Gridworld")
+            plt.imshow(world)
+            plt.legend()
+            plt.show()
 
     def nextState(self, action):
-        # states = self.state
-        # y = self.state[0]
-        # x = self.state[1]
-        # print(self.state_current)
-        # print(self.state_current[0], self.state_current[1])
-        # print(y, x)
         if action == "north":
             nextStates = (self.state_current[0] - 1, self.state_current[1])
         elif action == "south":
@@ -110,22 +101,29 @@ class Agent:
         self.gamma = 0.5
         self.number_iterations = 0
         self.states = []
+        self.total_reward_episodes = []
 
-        #Sarsa
+        #SARSA/QL
         self.alpha = 0
         self.e = 0.1
-        self.q_values = numpy.zeros([9, 9])
+        self.q_values = [[[0 for k in range(4)] for j in range(9)] for i in range(9)]
+        self.episode = 0
 
     def e_greedy(self, statest = None):
         if statest:
             states = statest
         else:
             states = self.states[-1]
-        if random.uniform(0,1) >= 0.1:
-            best_neighbours = self.return_best_neighbours(states[0], states[1], True)
+        # Decreasing epsilon to reduce exploration over time
+        if random.uniform(0,1) >= (0.1-0.1*(self.episode/self.number_iterations)):
+            # First check for the reward, since q value terminal state = 0
+            terminal, best_neighbours = self.return_best_neighbours(states[0], states[1], reward=True)
             action_index = random.choice(best_neighbours)
-            if states == (8,7): action_index = 2
-            if states == (7, 8): action_index = 1
+            if terminal == "terminal":
+                return self.actions[action_index]
+            else:
+                terminal, best_neighbours = self.return_best_neighbours(states[0], states[1], SARSA=True)
+                action_index = random.choice(best_neighbours)
             return self.actions[action_index]
         else:
             #TODO: explore non-optimal actions?
@@ -139,10 +137,12 @@ class Agent:
         self.e = e
         # Initialize Q(s,a) arbitrarily
         #self.q_values = numpy.zeros([9, 9])
-        self.q_values = [[[0 for k in range(4)] for j in range(9)] for i in range(9)]
+
         for i in range(episodes):
+            self.episode = i
             # Initialize s
             self.states.append(self.State.state_current)
+            self.total_reward_episodes.append(0)# Keep track of reward per episode
             # Choose a from s using e-greedy
             action = self.e_greedy()
             # Repeat for each step of episode
@@ -150,14 +150,12 @@ class Agent:
                 # Take action a, observe r, s'
                 new_state = self.takeAction(action)
                 reward = self.State.returnReward(new_state)
+                self.total_reward_episodes[-1] += reward # Keep track of reward per episode
                 current_action_index = self.actions.index(action)
                 # Choose a' from s' using e=-greedy
                 action = self.e_greedy(new_state)
                 new_action_index = self.actions.index(action)
                 # Q(s,a) <- Q(s,a) + a(r + gamma*Q(s',a') - Q(s,a))
-                #TODO: more recursive?
-                #q_prime = self.State.returnReward(self.State.nextState(action))
-
                 q_prime = self.q_values[new_state[0]][new_state[1]][new_action_index]
                 q_s_a = self.q_values[self.states[-1][0]][self.states[-1][1]][current_action_index]
                 self.q_values[self.states[-1][0]][self.states[-1][1]][current_action_index] += self.alpha * (reward + self.gamma * q_prime - q_s_a)
@@ -170,27 +168,35 @@ class Agent:
             self.reset()
             # Until s is terminal
 
-    def Q_learning(self, episodes, gamma, alpha):
+    def Q_learning(self, episodes, gamma, alpha, e):
         self.number_iterations = episodes
         self.gamma = gamma
         self.alpha = alpha
-        self.q_values = numpy.zeros([9, 9])
+        self.e = e
         for i in range(episodes):
             # Initialize s
-            # TODO: random start
-            self.states.append(start)
-            # Choose a from s using e-greedy
-
+            self.states.append(self.State.state_current)
+            self.total_reward_episodes.append(0)  # Keep track of reward per episode
+            self.episode = i
             # Repeat for each step of episode
-
-            # Take action a, observe r, s'
-
-            # Choose a' from s' using e=-greedy
-
-            # Q(s,a) <- Q(s,a) + a(r + gamma*Q(s',a') - Q(s,a))
-
-            # s<-s', a<-a'
+            while self.State.over is False:
+                # Choose a from s using policy from Q (e.g e-greedy)
+                action = self.e_greedy()
+                # Take action a, observe r, s'
+                new_state = self.takeAction(action)
+                reward = self.State.returnReward(new_state)
+                self.total_reward_episodes[-1] += reward  # Keep track of reward per episode
+                # Q(s,a) <- Q(s,a) + a(r + gamma* max(a)Q(s',a) - Q(s,a))
+                current_action_index = self.actions.index(action)
+                maxa_qsa = max(self.q_values[new_state[0]][new_state[1]])
+                self.q_values[self.states[-1][0]][self.states[-1][1]][current_action_index] += self.alpha * (
+                            reward + self.gamma * maxa_qsa - self.q_values[self.states[-1][0]][self.states[-1][1]][current_action_index])
+                # s<-s',
+                self.states.append(new_state)
+                self.State.state_current = new_state
+                self.State.isOver()
             # Until s is terminal
+            self.reset()
 
 
     def equiprobableAction(self):
@@ -207,7 +213,8 @@ class Agent:
         self.gamma = gamma
         for i in range(iterations):
             self.MCpath()
-            self.backUpMC()
+            reward = self.backUpMC()
+            self.total_reward_episodes.append(reward)
             self.reset()
 
     def MCpath(self):
@@ -225,18 +232,23 @@ class Agent:
         first = True
         G = 0
         self.visit = numpy.zeros([9, 9])
+        reward_path = 0
+        ## For actual implementation: use lower for loop. Terminal tiles will be 0 then.
         #for i in reversed(range(len(self.states[0:-1]))):  # starts at final last of list, and descends to first state
-        for i in reversed(range(len(self.states))):  # starts at final last of list, and descends to first state
+        for i in reversed(range(len(self.states))):  # starts at last of list, and descends to first state
             # Coordinates:
             y = self.states[i][0]
             x = self.states[i][1]
             # G calculation
+            ## For actual implementation: use only else: Terminal tiles will be 0 then.
             if first:
                 G = self.State.returnReward(self.states[i])
                 first = False
             else:
                 G = self.gamma * G + self.State.returnReward(self.states[i + 1])
             if self.visit[y][x] == 0:
+                ## When actual implementation: change i
+                reward_path += self.State.returnReward(self.states[i])
                 self.total_reward[y][x] += G
                 # number of visits:
                 self.total_visits[y][x] += 1
@@ -244,16 +256,18 @@ class Agent:
                 self.visit[y][x] = 1
                 # Update value function:
                 self.value_function[y][x] = self.total_reward[y][x] / self.total_visits[y][x]
+        # For keeping track of reward over time:
+        return reward_path
 
-    def show_value_function(self, SARSA=False):
+    def show_value_function(self, SARSA=False, QL=False):
         ax = plt.subplot()
         for i in range(9):
             for j in range(9):
                 if grid[i][j] != 0 and grid[i][j] != 50 and grid[i][j] != -50:
-                    if SARSA:
+                    if SARSA or QL:
                         best_neighbour = [self.q_values[i][j].index(max(self.q_values[i][j]))]
                     else:
-                        best_neighbour = self.return_best_neighbours(i, j)
+                        terminal, best_neighbour = self.return_best_neighbours(i, j)
                     if 0 in best_neighbour:# == "north":
                         ax.quiver(j, i, 0, 1)
                     if 1 in best_neighbour:# == "south":
@@ -264,55 +278,121 @@ class Agent:
                         ax.quiver(j, i, -1, 0)
         if SARSA:
             plt.title(
-                "Q-value function gridworld. Gamma = {}. # iterations = {}\n Alpha = {}. e = {}".format(self.gamma, self.number_iterations, self.alpha, self.e))
+                "SARSA: Optimal policy in gridworld. Gamma = {} \n # iterations = {} Alpha = {}. e = {}".format(self.gamma,
+                                                                                                               self.number_iterations,
+                                                                                                               self.alpha, self.e))
             for i in range (9):
                 print (i , self.q_values[i], i)
+            self.q_values = [[max(self.q_values[i][j]) for j in range(9)] for i in range(9)]
+            plt.imshow(self.q_values)
+        elif QL:
+            plt.title(
+                "Q-Learning: Optimal policy in gridworld. Gamma = {} \n # iterations = {} Alpha = {}. e = {}".format(self.gamma,
+                                                                                                        self.number_iterations,
+                                                                                                        self.alpha,
+                                                                                                        self.e))
+            for i in range(9):
+                print(i, self.q_values[i], i)
             self.q_values = [[max(self.q_values[i][j]) for j in range(9)] for i in range(9)]
             plt.imshow(self.q_values)
         else:
             plt.title("Value function gridworld after MC policy evaluation for\n equiprobable policy. Gamma = {}. # iterations = {}\n Absolute tolerance arrows = 0.0001".format(self.gamma, self.number_iterations))
             plt.imshow(self.value_function)
-            plt.clim(-5, 5)
+            #plt.clim(-5, 5)
         plt.subplots_adjust(top=0.85)
         plt.colorbar()
         plt.show()
 
-    def return_best_neighbours(self, y, x, SARSA=False):
+    def return_best_neighbours(self, y, x, SARSA=False, reward=False):
         neighbours = [-math.inf, -math.inf, -math.inf, -math.inf]
         #north
         if y-1 >= 0:
             if grid[y-1][x] != 0:
                 if SARSA: neighbours[0] = max(self.q_values[y-1][x])
+                elif reward: neighbours[0] = self.State.returnReward((y-1, x))
                 else: neighbours[0] = self.value_function[y-1][x]
         #south
         if y+1 < 9:
             if grid[y+1][x] != 0:
                 if SARSA: neighbours[1] = max(self.q_values[y+1][x])
+                elif reward: neighbours[1] = self.State.returnReward((y + 1, x))
                 else: neighbours[1] = self.value_function[y+1][x]
         #east
         if x+1 < 9:
             if grid[y][x+1] != 0:
                 if SARSA: neighbours[2] = max(self.q_values[y][x+1])
+                elif reward: neighbours[2] = self.State.returnReward((y, x+1))
                 else: neighbours[2] = self.value_function[y][x+1]
         #west
         if x-1 >= 0:
             if grid[y][x-1] != 0:
                 if SARSA: neighbours[3] = max(self.q_values[y][x-1])
+                elif reward: neighbours[3] = self.State.returnReward((y, x-1))
                 else: neighbours[3] = self.value_function[y][x-1]
         max_value = max(neighbours)
         indices = [index for index, value in enumerate(neighbours) if math.isclose(value, max_value, abs_tol=0.0001)]#value == max_value]
-        return indices
+        # For reward: since q value terminal node is 0 also check for reward
+        if reward and max_value == 50:
+            return "terminal", indices
+        return None, indices
 
     def reset(self):
         self.states = []
         self.State = State()
 
+def plot_total_reward(reward1, reward2, reward3):
+    x = []
+    for i in range(len(reward1)):
+        x.append(i)
+    plt.figure()
+    poly = np.polyfit(x, reward1, 10)
+    poly_y = np.poly1d(poly)(x)
+    poly2 = np.polyfit(x, reward2, 10)
+    poly_y2 = np.poly1d(poly2)(x)
+    poly3 = np.polyfit(x, reward3, 10)
+    poly_y3 = np.poly1d(poly3)(x)
+    plt.plot(x, poly_y, label="Reward MCPE equiprobable policy")
+    plt.plot(x, poly_y2, label="Reward SARSA")
+    plt.plot(x, poly_y3, label="Reward Q-Learning")
+    plt.xlabel("Episodes")
+    plt.ylabel("Reward")
+    plt.title("Reward per episode for MCPE equiprobable policy & SARSA & Q-learning\n Gamma = {}, alpha = {}, e = {}".format(0.8, 0.5, 0.1))
+    plt.legend()
+    plt.show()
 
 # Press the green button in the gutter to run the script.
 if __name__ == '__main__':
-    agent = Agent()
-    #agent.MonteCarlo(10000)
-    agent.SARSA_greedy(1000, 0.8, 0.5, 0.1)
-    agent.show_value_function(SARSA=True)
+    v_valueMC = 0
+    q_valueSARSA = 0
+    q_valueQL = 0
+    reward = 0
 
-# See PyCharm help at https://www.jetbrains.com/help/pycharm/
+    agent = Agent()
+    agent.State.printBoard()
+
+    ## Plot v-values MC
+    if v_valueMC:
+        agent = Agent()
+        agent.MonteCarlo(10000, 0.5)
+
+    ## Plot q values SARSA/QL:
+    if q_valueSARSA:
+        agent = Agent()
+        agent.SARSA_greedy(100000, 0.8, 0.5, 0.1)
+        agent.show_value_function(SARSA=True)
+
+    ## Plot q values SARSA/QL:
+    if q_valueQL:
+        agent = Agent()
+        agent.Q_learning(1000, 0.8, 0.5, 0.1)
+        agent.show_value_function(SARSA=True)
+
+    ## Plot reward Equiprobable Policy & SARSA & QL:
+    if reward:
+        agent1 = Agent()
+        agent2 = Agent()
+        agent3 = Agent()
+        agent1.MonteCarlo(1000, 0.8)
+        agent2.SARSA_greedy(1000, 0.8, 0.5, 0.1)
+        agent3.Q_learning(1000, 0.8, 0.5, 0.1)
+        plot_total_reward(agent1.total_reward_episodes, agent2.total_reward_episodes, agent3.total_reward_episodes)
