@@ -241,6 +241,7 @@ class Agent:
             self.State.state_current = self.takeAction(action)
             # Add to the list of states
             self.states.append(self.State.state_current)
+            self.State.statesState.append(self.State.state_current)
             # Check if end tile has been reached
             self.State.isOver()
 
@@ -251,7 +252,7 @@ class Agent:
         self.visit = numpy.zeros([9, 9])
         reward_path = 0
         ## For actual implementation: use lower for loop. Terminal tiles will be 0 then.
-        #for i in reversed(range(len(self.states[0:-1]))):  # starts at final last of list, and descends to first state
+        for i in reversed(range(len(self.states[0:-1]))):  # starts at final last of list, and descends to first state
         for i in reversed(range(len(self.states))):  # starts at last of list, and descends to first state
             # Coordinates:
             y = self.states[i][0]
@@ -387,8 +388,9 @@ def plot_total_reward(reward1, reward2, reward3):
 if __name__ == '__main__':
     v_valueMC = 0
     q_valueSARSA = 0
-    q_valueQL = 0
+    q_valueQL = 1
     reward_over_episodes = 0
+
     # Plot v-values MC
     if v_valueMC:
         agent = Agent()
@@ -397,14 +399,14 @@ if __name__ == '__main__':
     # Plot q values SARSA/QL:
     if q_valueSARSA:
         agent = Agent()
-        agent.SARSA_greedy(10, 0.8, 0.5, 0.1)
+        agent.SARSA_greedy(1000, 0.8, 0.5, 0.1)
         agent.show_value_function(SARSA=True)
 
     # Plot q values SARSA/QL:
     if q_valueQL:
         agent = Agent()
-        agent.Q_learning(1000, 0.8, 0.5, 0.1)
-        agent.show_value_function(SARSA=True)
+        agent.Q_learning(100000, 0.8, 0.5, 0.1)
+        agent.show_value_function(QL=True)
 
     # Plot reward Equiprobable Policy & SARSA & QL:
     if reward_over_episodes:
