@@ -251,19 +251,19 @@ class Agent:
         G = 0
         self.visit = numpy.zeros([9, 9])
         reward_path = 0
-        ## For actual implementation: use lower for loop. Terminal tiles will be 0 then.
+        ## For actual implementation: use top- for loop. Terminal tiles will be 0 then.
         for i in reversed(range(len(self.states[0:-1]))):  # starts at final last of list, and descends to first state
-        for i in reversed(range(len(self.states))):  # starts at last of list, and descends to first state
+        #for i in reversed(range(len(self.states))):  # starts at last of list, and descends to first state
             # Coordinates:
             y = self.states[i][0]
             x = self.states[i][1]
             # G calculation
             ## For actual implementation: use only else: Terminal tiles will be 0 then.
-            if first:
-                G = self.State.returnReward(self.states[i])
-                first = False
-            else:
-                G = self.gamma * G + self.State.returnReward(self.states[i + 1])
+            # if first:
+            #     G = self.State.returnReward(self.states[i])
+            #     first = False
+            # else:
+            G = self.gamma * G + self.State.returnReward(self.states[i + 1])
             if self.visit[y][x] == 0:
                 ## When actual implementation: change i
                 reward_path += self.State.returnReward(self.states[i])
@@ -363,20 +363,25 @@ class Agent:
 
 
 # Printer function to print return reward over episodes for the equiprobable policy, SARSA & QL
-def plot_total_reward(reward1, reward2, reward3):
+def plot_total_reward(reward1, reward2, reward3, smooth=True):
     x = []
     for i in range(len(reward1)):
         x.append(i)
-    plt.figure()
-    poly = np.polyfit(x, reward1, 10)
-    poly_y = np.poly1d(poly)(x)
-    poly2 = np.polyfit(x, reward2, 10)
-    poly_y2 = np.poly1d(poly2)(x)
-    poly3 = np.polyfit(x, reward3, 10)
-    poly_y3 = np.poly1d(poly3)(x)
-    plt.plot(x, poly_y, label="Reward MCPE equiprobable policy")
-    plt.plot(x, poly_y2, label="Reward SARSA")
-    plt.plot(x, poly_y3, label="Reward Q-Learning")
+    if smooth:
+        plt.figure()
+        poly = np.polyfit(x, reward1, 10)
+        poly_y = np.poly1d(poly)(x)
+        poly2 = np.polyfit(x, reward2, 10)
+        poly_y2 = np.poly1d(poly2)(x)
+        poly3 = np.polyfit(x, reward3, 10)
+        poly_y3 = np.poly1d(poly3)(x)
+        plt.plot(x, poly_y, label="Reward MCPE equiprobable policy")
+        plt.plot(x, poly_y2, label="Reward SARSA")
+        plt.plot(x, poly_y3, label="Reward Q-Learning")
+    else:
+        plt.plot(x, reward1, label="Reward MCPE equiprobable policy")
+        plt.plot(x, reward2, label="Reward SARSA")
+        plt.plot(x, reward3, label="Reward Q-Learning")
     plt.xlabel("Episodes")
     plt.ylabel("Reward")
     plt.title("Reward per episode for MCPE equiprobable policy & SARSA & Q-learning\n Gamma = {}, alpha = {}, e = {}".format(0.8, 0.5, 0.1))
@@ -388,8 +393,9 @@ def plot_total_reward(reward1, reward2, reward3):
 if __name__ == '__main__':
     v_valueMC = 0
     q_valueSARSA = 0
-    q_valueQL = 1
+    q_valueQL = 0
     reward_over_episodes = 0
+    average_reward_over_episodes = 1
 
     # Plot v-values MC
     if v_valueMC:
@@ -417,3 +423,31 @@ if __name__ == '__main__':
         agent2.SARSA_greedy(1000, 0.8, 0.5, 0.1)
         agent3.Q_learning(1000, 0.8, 0.5, 0.1)
         plot_total_reward(agent1.total_reward_episodes, agent2.total_reward_episodes, agent3.total_reward_episodes)
+
+    # Plot average reward Equiprobable Policy & SARSA & QL:
+    if average_reward_over_episodes:
+        iterations = 1000
+        episodes = 1000
+        totalMC = [0] * episodes
+        totalSARSA = [0] * episodes
+        totalQL = [0] * episodes
+        for i in range(iterations):
+            agent1 = Agent()
+            agent1.MonteCarlo(1000, 0.8)
+            for j in range(episodes):
+                totalMC[j] += agent1.total_reward_episodes[j]
+        for i in range(iterations):
+            agent2 = Agent()
+            agent2.SARSA_greedy(1000, 0.8, 0.5, 0.1)
+            for j in range(episodes):
+                totalSARSA[j] += agent2.total_reward_episodes[j]
+        for i in range(iterations):
+            agent3 = Agent()
+            agent3.SARSA_greedy(1000, 0.8, 0.5, 0.1)
+            for j in range(episodes):
+                totalQL[j] += agent3.total_reward_episodes[j]
+        for i in range(episodes):
+            totalMC[i] = totalMC[i]/iterations
+            totalSARSA[i] = totalSARSA[i]/iterations
+            totalQL[i] = totalQL[i]/iterations
+        plot_total_reward(totalMC, totalSARSA, totalQL, smooth=False)
